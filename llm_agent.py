@@ -1,3 +1,5 @@
+
+
 import os
 import json
 import re
@@ -29,13 +31,13 @@ class LLMAgent:
         response_content = ""
         try:
             response = await self.client.chat.completions.create(
-                model="deepseek-reasoner",
+                model="deepseek-chat",  # MODIFIED: 强制使用 deepseek-chat
                 messages=[
                     {"role": "system", "content": LATEX_REFERENCE_PARSER_PROMPT},
                     {"role": "user", "content": user_content}
                 ],
                 temperature=0.0,
-                max_tokens=65536,
+                max_tokens=8192,  # MODIFIED: 统一 max_tokens
                 timeout=180.0,
                 response_format={"type": "json_object"}
             )
@@ -84,13 +86,13 @@ class LLMAgent:
         response_content = ""
         try:
             response = await self.client.chat.completions.create(
-                model=os.getenv("ANALYSIS_MODEL_NAME", "deepseek-reasoner"),
+                model="deepseek-chat", # MODIFIED: 强制使用 deepseek-chat
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
                 temperature=0.1,
-                max_tokens=65536,
+                max_tokens=8192, # MODIFIED: 统一 max_tokens
                 timeout=300.0,
                 response_format={"type": "json_object"}
             )
@@ -128,12 +130,14 @@ class LLMAgent:
         )
         try:
             response = await self.client.chat.completions.create(
-                model="deepseek-reasoner",
+                model="deepseek-chat", # MODIFIED: 强制使用 deepseek-chat
                 messages=[
                     {"role": "system", "content": HTML_CORRECTOR_PROMPT},
                     {"role": "user", "content": user_content}
                 ],
-                temperature=0.0, max_tokens=65536, timeout=180.0
+                temperature=0.0,
+                max_tokens=8192, # MODIFIED: 统一 max_tokens
+                timeout=180.0
             )
             corrected_html = response.choices[0].message.content
             # 简单的健全性检查

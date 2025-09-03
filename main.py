@@ -1,3 +1,5 @@
+
+
 # main.py
 
 import os
@@ -15,8 +17,9 @@ import archive_handler
 SOURCE_ARCHIVE_PATH = 'latex_source.gz'
 EXTRACT_DIR = './data'
 OUTPUT_HTML_FILE = 'references_analysis_report.html'
-BATCH_SIZE = 5
-REFERENCE_PARSING_BATCH_SIZE = 20
+# MODIFIED: 将批处理大小设为1，为每个参考文献创建一个独立的并发任务
+BATCH_SIZE = 1
+REFERENCE_PARSING_BATCH_SIZE = 1
 
 # --- HTML 模板 ---
 HTML_HEADER = """
@@ -201,7 +204,7 @@ async def main() -> List[Dict[str, Any]]:
         print(f"✅ LLM成功提取并结构化了 {total_refs} 条参考文献及其标题。")
 
         # 步骤 4: 创建并发提取任务批次
-        print(f"\n步骤 4: 将提取任务分为多个批次 (每批 {BATCH_SIZE} 条)...")
+        print(f"\n步骤 4: 将为每个参考文献创建一个独立的并发分析任务...")
         extraction_tasks = []
         extraction_batches_info = []
         for i in range(0, total_refs, BATCH_SIZE):
@@ -226,7 +229,7 @@ async def main() -> List[Dict[str, Any]]:
             if chunk is None:  # 如果 run_extraction_batch 返回 None 表示失败
                 start_key = batch_info[0]['key']
                 end_key = batch_info[-1]['key']
-                print(f"   └── ⚠️ 批次 {start_key} - {end_key} 分析失败，将在报告中标记。")
+                print(f"   └── ⚠️ 参考文献 {start_key} 分析失败，将在报告中标记。")
                 for ref in batch_info:
                     final_data_map[ref['key']]['analysis_failed'] = True
                 continue
