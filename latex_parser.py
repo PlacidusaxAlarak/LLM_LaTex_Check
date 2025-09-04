@@ -1,7 +1,8 @@
 import re
 import os
 from pathlib import Path
-
+from typing import List, Tuple, Dict, Any
+import bibtexparser
 
 def get_full_latex_source_and_main_file(base_dir_str: str) -> tuple[str, Path | None]:
     """
@@ -55,8 +56,8 @@ def get_full_latex_source_and_main_file(base_dir_str: str) -> tuple[str, Path | 
             else:
                 print(f"  -> ⚠️ 警告: 找不到被包含的文件: {included_file_name}")
                 return f"% FILE NOT FOUND: {match.group(0)}\n"
-
-        return re.sub(r'^[ \t]*\\(input|subfile){([^}]+)}', replacer, content, flags=re.MULTILINE)
+        # MODIFIED: Also handle \include
+        return re.sub(r'^[ \t]*\\(input|subfile|include){([^}]+)}', replacer, content, flags=re.MULTILINE)
 
     all_files = find_all_tex_files()
     if not all_files:
@@ -67,6 +68,75 @@ def get_full_latex_source_and_main_file(base_dir_str: str) -> tuple[str, Path | 
     full_content = combine_recursively(main_file)
     return full_content, main_file
 
+def find_bib_file_paths(full_latex_content: str, base_dir: Path) -> List[Path]:
+    """从LaTeX源码中找到\bibliography命令，并返回所有.bib文件的绝对路径列表。"""
+    # \bibliography{ref1,ref2, ref3}
+    bib_matches = re.findall(r'\\bibliography{([^}]+)}', full_latex_content)
+    if not bib_matches:
+        return []
+
+    bib_file_names = []
+    for match in bib_matches:
+        bib_file_names.extend([name.strip() for name in match.split(',')])
+
+    found_paths = []
+    for name in bib_file_names:
+        bib_file_name = f"{name}.bib"
+        # 在整个项目目录中搜索.bib文件
+        possible_paths = list(base_dir.rglob(bib_file_name))
+        if possible_paths:
+            found_paths.append(possible_paths[0])
+            print(f"   └── 成功定位到 .bib 文件: {possible_paths[0].relative_to(base_dir)}")
+        else:
+            print(f"   └── ⚠️ 警告: 找不到指定的 .bib 文件: {bib_file_name}")
+
+    return found_paths
+
+def parse_bib_files(bib_paths: List[Path]) -> Tuple[List[Dict[str, Any]], str]:
+    """使用bibtexparser解析多个.bib文件，并返回结构化的参考文献列表和原始文本。"""
+    bib_database = None
+    full_bib_content = ""
+
+    for bib_path in bib_paths:
+        try:
+            with open(bib_path, 'r', encoding='utf-8') as bibfile:
+                bib_content = bibfile.read()
+                full_bib_content += bib_content + "\n"
+                # Reset file pointer to read again with parser
+                bibfile.seek(0)
+                parser = bibtexparser.bparser.BibTexParser(common_strings=True)
+                db = bibtexparser.load(bibfile, parser=parser)
+                if bib_database is None:
+                    bib_database = db
+                else:
+                    # TODO: More robust merging if keys conflict
+                    bib_database.entries.extend(db.entries)
+        except Exception as e:
+            print(f"❌ 解析 .bib 文件 '{bib_path}' 时出错: {e}")
+            return [], ""
+
+    if not bib_database or not bib_database.entries:
+        return [], full_bib_content
+
+    structured_references = []
+    for entry in bib_database.entries:
+        # 清理和规范化作者字段
+        authors = entry.get('author', '未知作者')
+        # bibtexparser有时会保留换行符，需要清理
+        authors = re.sub(r'\s+', ' ', authors).strip()
+
+        # 清理标题字段中的花括号
+        title = entry.get('title', '无标题')
+        title = title.replace('{', '').replace('}', '')
+
+        structured_references.append({
+            "key": entry.get('ID', 'N/A'),
+            "inferred_title": title,
+            "inferred_author": authors,
+            "content": bibtexparser.dumps([entry]) # 保留原始条目以供参考
+        })
+
+    return structured_references, full_bib_content
 
 def extract_raw_references_text(full_latex_content: str, main_file: Path) -> str:
     """
