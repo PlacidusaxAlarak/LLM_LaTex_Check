@@ -1,5 +1,3 @@
-
-
 # main.py
 
 import os
@@ -8,13 +6,14 @@ import re
 from datetime import datetime
 from dotenv import load_dotenv
 from typing import List, Dict, Any
+from pathlib import Path  # 确保导入 Path
 import llm_agent
 import latex_parser
 import file_writer
 import archive_handler
 
 # --- 配置 ---
-SOURCE_ARCHIVE_PATH = 'latex_source.gz'
+# SOURCE_ARCHIVE_PATH = 'latex_source.gz' # MODIFIED: 移除此行
 EXTRACT_DIR = './data'
 OUTPUT_HTML_FILE = 'references_analysis_report.html'
 # MODIFIED: 将批处理大小设为1，为每个参考文献创建一个独立的并发任务
@@ -151,9 +150,28 @@ async def main() -> List[Dict[str, Any]]:
     agent = llm_agent.LLMAgent(api_key=api_key)
 
     try:
+        # --- MODIFIED: 自动检测源归档文件 ---
+        supported_extensions = ('.zip', '.tar', '.gz', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2')
+        project_dir = Path('.')
+        found_archives = [p for p in project_dir.iterdir() if
+                          p.is_file() and str(p.name).endswith(supported_extensions)]
+
+        if len(found_archives) == 0:
+            print(f"❌ 错误: 在项目目录中未找到任何支持的归档文件 {supported_extensions}。")
+            return []
+        if len(found_archives) > 1:
+            print(f"❌ 错误: 在项目目录中找到多个支持的归档文件。请只保留一个。")
+            for archive in found_archives:
+                print(f"  - {archive.name}")
+            return []
+
+        source_archive_path = found_archives[0]
+        print(f"✅ 自动检测到源归档文件: {source_archive_path.name}")
+        # --- END OF MODIFICATION ---
+
         # 步骤 1: 解压归档文件
-        print(f"步骤 1: 正在解压 '{SOURCE_ARCHIVE_PATH}'...")
-        archive_handler.extract_archive(SOURCE_ARCHIVE_PATH, EXTRACT_DIR)
+        print(f"\n步骤 1: 正在解压 '{source_archive_path.name}'...")  # MODIFIED: 使用检测到的文件名
+        archive_handler.extract_archive(str(source_archive_path), EXTRACT_DIR)  # MODIFIED: 使用检测到的文件路径
 
         # 步骤 2: 智能整合LaTeX源文件
         print("\n步骤 2: 正在智能整合所有LaTeX源文件...")
